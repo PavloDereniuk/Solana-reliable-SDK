@@ -1,0 +1,63 @@
+{
+  "name": "solana-reliable-sdk",
+  "version": "0.1.0",
+  "description": "SDK that improves RPC and transaction reliability for Solana dApps — failover pool, circuit breaker, auto retry, priority fees",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "keywords": [
+    "solana",
+    "rpc",
+    "reliability",
+    "sdk",
+    "web3",
+    "blockchain",
+    "circuit-breaker",
+    "failover",
+    "priority-fee",
+    "transaction-retry"
+  ],
+  "author": "Pavel Dereniuk",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PavloDereniuk/solana-reliable-sdk"
+  },
+  "homepage": "https://github.com/PavloDereniuk/solana-reliable-sdk#readme",
+  "bugs": {
+    "url": "https://github.com/PavloDereniuk/solana-reliable-sdk/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "peerDependencies": {
+    "@solana/web3.js": "^1.90.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.2",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
+  },
+  "dependencies": {
+    "@solana/web3.js": "^1.98.4"
+  }
+}
