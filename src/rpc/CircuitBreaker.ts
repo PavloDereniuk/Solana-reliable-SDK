@@ -26,6 +26,10 @@ export class CircuitBreaker {
     return this.state;
   }
 
+  getState(): CircuitState {
+    return this.state;
+  }
+
   isAvailable(): boolean {
     if (this.state === 'CLOSED' || this.state === 'HALF_OPEN') {
       return true;
