@@ -27,8 +27,6 @@ import {
   createMintToInstruction,
   createTransferInstruction,
   TOKEN_PROGRAM_ID,
-  ASSOCIATED_TOKEN_PROGRAM_ID,
-  getMint,
 } from '@solana/spl-token';
 import { ReliableClient } from '../src/index.js';
 
@@ -51,28 +49,7 @@ async function main() {
   await conn.confirmTransaction(airdropSig, 'confirmed');
   console.log('Airdrop confirmed (2 SOL)');
 
-  // ── 2. Create SPL token mint ──────────────────────────────────────────────
-  console.log('Creating mint…');
-  const mint = await createMint(conn, payer, payer.publicKey, null, DECIMALS);
-  console.log('Mint:', mint.toBase58());
-
-  // ── 3. Create Associated Token Accounts ───────────────────────────────────
-  const senderAta = await getOrCreateAssociatedTokenAccount(conn, payer, mint, payer.publicKey);
-  const recipientAta = await getOrCreateAssociatedTokenAccount(conn, payer, mint, recipient.publicKey);
-  console.log('Sender ATA:', senderAta.address.toBase58());
-  console.log('Recipient ATA:', recipientAta.address.toBase58());
-
-  // ── 4. Mint tokens to sender ──────────────────────────────────────────────
-  const mintTx = new Transaction().add(
-    createMintToInstruction(mint, senderAta.address, payer.publicKey, MINT_AMOUNT),
-  );
-
-  const basicConn = new Connection(DEVNET, 'confirmed');
-  const mintInfo = await basicConn.sendTransaction(mintTx, [payer]);
-  await basicConn.confirmTransaction(mintInfo, 'confirmed');
-  console.log(`Minted ${MINT_AMOUNT / 10 ** DECIMALS} tokens`);
-
-  // ── 5. Transfer via ReliableClient ───────────────────────────────────────
+  // ── 2. Build ReliableClient (used for all transactions below) ────────────
   const client = new ReliableClient({
     endpoints: [
       DEVNET,
@@ -86,6 +63,27 @@ async function main() {
     },
   });
 
+  // ── 3. Create SPL token mint ──────────────────────────────────────────────
+  // createMint uses its own internal connection; pass conn for setup steps
+  console.log('Creating mint…');
+  const mint = await createMint(conn, payer, payer.publicKey, null, DECIMALS);
+  console.log('Mint:', mint.toBase58());
+
+  // ── 4. Create Associated Token Accounts ───────────────────────────────────
+  const senderAta = await getOrCreateAssociatedTokenAccount(conn, payer, mint, payer.publicKey);
+  const recipientAta = await getOrCreateAssociatedTokenAccount(conn, payer, mint, recipient.publicKey);
+  console.log('Sender ATA:', senderAta.address.toBase58());
+  console.log('Recipient ATA:', recipientAta.address.toBase58());
+
+  // ── 5. Mint tokens via ReliableClient ────────────────────────────────────
+  const mintTx = new Transaction().add(
+    createMintToInstruction(mint, senderAta.address, payer.publicKey, MINT_AMOUNT),
+  );
+  await client.sendAndConfirm(mintTx, [payer]);
+  console.log(`Minted ${MINT_AMOUNT / 10 ** DECIMALS} tokens`);
+
+  // ── 6. Transfer via ReliableClient ───────────────────────────────────────
+
   const transferTx = new Transaction().add(
     createTransferInstruction(
       senderAta.address,
@@ -97,7 +95,7 @@ async function main() {
     ),
   );
 
-  console.log('Sending SPL token transfer…');
+  console.log('Sending SPL token transfer via ReliableClient…');
   const { signature } = await client.sendAndConfirm(transferTx, [payer]);
   console.log('Confirmed!');
   console.log('Signature:', signature);

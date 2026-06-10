@@ -155,14 +155,15 @@ const ws = new WsManager(wsEndpoint, {
   commitment: 'processed',
   healthCheckIntervalMs: 10_000,
   healthFailureThreshold: 3,
-  reconnectBaseDelayMs: 1_000,
-  reconnectMaxDelayMs: 30_000,
+  initialReconnectDelayMs: 1_000,
+  maxReconnectDelayMs: 30_000,
 });
 
-ws.addSubscription('myKey', {
-  subscribe: (conn) => conn.onAccountChange(pubkey, callback),
-  unsubscribe: (conn, id) => conn.removeAccountChangeListener(id),
-});
+ws.addSubscription(
+  'myKey',
+  (conn) => conn.onAccountChange(pubkey, callback),
+  (conn, id) => conn.removeAccountChangeListener(id),
+);
 
 ws.removeSubscription('myKey');
 ws.destroy();
