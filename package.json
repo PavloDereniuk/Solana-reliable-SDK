@@ -52,12 +52,17 @@
     "@solana/web3.js": "^1.90.0"
   },
   "devDependencies": {
+    "@solana/addresses": "^6.9.0",
+    "@solana/rpc": "^6.9.0",
+    "@solana/rpc-types": "^6.9.0",
+    "@solana/signers": "^6.9.0",
+    "@solana/transactions": "^6.9.0",
     "@types/node": "^25.9.2",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3",
     "vitest": "^4.1.8"
   },
   "dependencies": {
-    "@solana/web3.js": "^1.98.4"
+    "@solana/web3.js": "^1.90.0"
   }
 }

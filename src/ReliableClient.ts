@@ -10,6 +10,8 @@ import {
 } from './tx/index.js';
 import { TransactionConfirmer, type ConfirmOptions } from './confirm/TransactionConfirmer.js';
 import { WsManager, type WsManagerOptions } from './ws/WsManager.js';
+import { MetricsCollector } from './metrics/MetricsCollector.js';
+import { JitoSender, type JitoSenderOptions } from './jito/JitoSender.js';
 
 export interface ReliableClientOptions {
   /** At least one RPC endpoint URL. First one is treated as highest priority. */
@@ -25,6 +27,10 @@ export interface ReliableClientOptions {
   tx?: Partial<TransactionSenderOptions>;
   confirm?: Partial<ConfirmOptions>;
   ws?: Partial<WsManagerOptions>;
+  /** Enable Jito/MEV bundle routing. */
+  jito?: JitoSenderOptions;
+  /** Pass a MetricsCollector to collect RPC + transaction metrics. */
+  metrics?: MetricsCollector;
 }
 
 /**
@@ -43,12 +49,17 @@ export class ReliableClient {
   readonly sender: TransactionSender;
   readonly confirmer: TransactionConfirmer;
   readonly ws: WsManager | undefined;
+  readonly jito: JitoSender | undefined;
+  readonly metrics: MetricsCollector | undefined;
 
   constructor(opts: ReliableClientOptions) {
     const { endpoints, commitment = 'confirmed', wsEndpoint } = opts;
 
+    this.metrics = opts.metrics;
+
     this.pool = new RpcPool(endpoints, {
       commitment,
+      metrics: this.metrics,
       ...opts.pool,
     });
 
@@ -75,14 +86,25 @@ export class ReliableClient {
         ...opts.ws,
       });
     }
+
+    if (opts.jito) {
+      this.jito = new JitoSender(this.pool, this.blockhashManager, opts.jito);
+    }
   }
 
   /**
    * Send a transaction and wait for confirmation.
    * Retry-loop, blockhash expiry, priority fees, and CU budget
    * are all handled automatically based on constructor options.
+   *
+   * If jito is configured, routes through the Jito block engine for MEV protection.
    */
   async sendAndConfirm(transaction: Transaction, signers: Keypair[]): Promise<SendResult> {
+    if (this.jito) {
+      const signature = await this.jito.sendWithMevProtection(transaction, signers);
+      this.metrics?.recordTransaction({ retries: 0, success: true, durationMs: 0 });
+      return { signature };
+    }
     return this.sender.send(transaction, signers);
   }
 
