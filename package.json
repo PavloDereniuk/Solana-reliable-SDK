@@ -53,7 +53,19 @@
     "node": ">=18.0.0"
   },
   "peerDependencies": {
-    "@solana/web3.js": "^1.90.0"
+    "@solana/web3.js": "^1.90.0",
+    "@solana/addresses": "^6.9.0",
+    "@solana/rpc": "^6.9.0",
+    "@solana/rpc-types": "^6.9.0",
+    "@solana/signers": "^6.9.0",
+    "@solana/transactions": "^6.9.0"
+  },
+  "peerDependenciesMeta": {
+    "@solana/addresses": { "optional": true },
+    "@solana/rpc": { "optional": true },
+    "@solana/rpc-types": { "optional": true },
+    "@solana/signers": { "optional": true },
+    "@solana/transactions": { "optional": true }
   },
   "devDependencies": {
     "@solana/addresses": "^6.9.0",
