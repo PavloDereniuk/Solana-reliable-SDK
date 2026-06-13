@@ -12,7 +12,7 @@
     }
   },
   "bin": {
-    "solana-diagnose": "./bin/diagnose.ts"
+    "solana-diagnose": "./bin/diagnose.js"
   },
   "files": [
     "dist",
