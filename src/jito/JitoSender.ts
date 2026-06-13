@@ -185,7 +185,7 @@ export class JitoSender {
     const deadline = Date.now() + this.bundleTimeoutMs;
     while (Date.now() < deadline) {
       const status = await this.getBundleStatus(bundleId);
-      if (status.status === 'Landed' || status.status === 'Failed' || status.status === 'Invalid') {
+      if (status.status === 'Landed' || status.status === 'Finalizing' || status.status === 'Failed' || status.status === 'Invalid') {
         return status;
       }
       await this.sleep(2_000);

@@ -47,6 +47,12 @@ vi.mock('../src/ws/WsManager.js', () => ({
   },
 }));
 
+vi.mock('../src/jito/JitoSender.js', () => ({
+  JitoSender: class {
+    sendWithMevProtection = vi.fn().mockResolvedValue('jito_sig');
+  },
+}));
+
 // Import AFTER mocks are registered
 const { ReliableClient } = await import('../src/ReliableClient.js');
 
@@ -110,5 +116,24 @@ describe('ReliableClient', () => {
 
   it('destroy() does not throw when ws is undefined', () => {
     expect(() => makeClient().destroy()).not.toThrow();
+  });
+
+  it('sendAndConfirm routes through JitoSender when jito option is provided', async () => {
+    const c = new ReliableClient({ endpoints: [ENDPOINT], jito: {} as any });
+    const tx = makeTx(keypair);
+    const result = await c.sendAndConfirm(tx, [keypair]);
+    expect(result.signature).toBe('jito_sig');
+  });
+
+  it('metrics.recordTransaction is called in jito path', async () => {
+    const recordFn = vi.fn();
+    const c = new ReliableClient({
+      endpoints: [ENDPOINT],
+      jito: {} as any,
+      metrics: { recordTransaction: recordFn } as any,
+    });
+    const tx = makeTx(keypair);
+    await c.sendAndConfirm(tx, [keypair]);
+    expect(recordFn).toHaveBeenCalledWith({ retries: 0, success: true, durationMs: 0 });
   });
 });

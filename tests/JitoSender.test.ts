@@ -183,4 +183,92 @@ describe('JitoSender', () => {
 
     vi.unstubAllGlobals();
   });
+
+  it('sendBundle throws when API returns an error object', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ error: { message: 'rate limited by block engine' } }),
+    }));
+
+    const jito = new JitoSender(makePool() as any, makeBlockhashManager() as any, { fallbackOnError: false });
+    await expect(jito.sendBundle([makeTx(keypair)], [keypair])).rejects.toThrow('rate limited by block engine');
+    vi.unstubAllGlobals();
+  });
+
+  it('sendBundle throws when API returns no result field', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ id: 1 }),
+    }));
+
+    const jito = new JitoSender(makePool() as any, makeBlockhashManager() as any, { fallbackOnError: false });
+    await expect(jito.sendBundle([makeTx(keypair)], [keypair])).rejects.toThrow('unexpected response shape');
+    vi.unstubAllGlobals();
+  });
+
+  it('sendWithMevProtection returns signature when bundle lands (Landed)', async () => {
+    let callCount = 0;
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ result: 'bundle-ok' }) });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          result: { value: [{ bundle_id: 'bundle-ok', confirmation_status: 'finalized', slot: 500 }] },
+        }),
+      });
+    }));
+
+    const jito = new JitoSender(makePool() as any, makeBlockhashManager() as any, { fallbackOnError: false });
+    const tx = makeTx(keypair);
+    const sig = await jito.sendWithMevProtection(tx, [keypair]);
+    expect(sig).toBe(keypair.publicKey.toBase58());
+    vi.unstubAllGlobals();
+  });
+
+  it('sendWithMevProtection returns signature when bundle is Finalizing (confirmed)', async () => {
+    let callCount = 0;
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ result: 'bundle-fin' }) });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          result: { value: [{ bundle_id: 'bundle-fin', confirmation_status: 'confirmed' }] },
+        }),
+      });
+    }));
+
+    const jito = new JitoSender(makePool() as any, makeBlockhashManager() as any, { fallbackOnError: false });
+    const tx = makeTx(keypair);
+    const sig = await jito.sendWithMevProtection(tx, [keypair]);
+    expect(sig).toBe(keypair.publicKey.toBase58());
+    vi.unstubAllGlobals();
+  });
+
+  it('getBundleStatus returns Finalizing for processed confirmation_status', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({
+        result: { value: [{ bundle_id: 'x', confirmation_status: 'processed' }] },
+      }),
+    }));
+
+    const jito = new JitoSender(makePool() as any, makeBlockhashManager() as any);
+    const status = await jito.getBundleStatus('x');
+    expect(status.status).toBe('Finalizing');
+    vi.unstubAllGlobals();
+  });
+
+  it('getBundleStatus throws on HTTP error', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503 }));
+
+    const jito = new JitoSender(makePool() as any, makeBlockhashManager() as any);
+    await expect(jito.getBundleStatus('abc')).rejects.toThrow('503');
+    vi.unstubAllGlobals();
+  });
 });
