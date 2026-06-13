@@ -11,8 +11,12 @@
       "types": "./dist/index.d.ts"
     }
   },
+  "bin": {
+    "solana-diagnose": "./bin/diagnose.ts"
+  },
   "files": [
     "dist",
+    "bin",
     "README.md",
     "LICENSE"
   ],
