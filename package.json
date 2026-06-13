@@ -90,6 +90,7 @@
     "vitest": "^4.1.8"
   },
   "dependencies": {
-    "@solana/web3.js": "^1.90.0"
+    "@solana/web3.js": "^1.90.0",
+    "bs58": "^4.0.1"
   }
 }

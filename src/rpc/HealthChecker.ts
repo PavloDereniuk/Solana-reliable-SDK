@@ -9,6 +9,7 @@ export interface EndpointHealth {
 
 export class HealthChecker {
   private health: Map<string, EndpointHealth> = new Map();
+  private readonly connections: Map<string, Connection> = new Map();
   private timer: ReturnType<typeof setInterval> | null = null;
   private readonly intervalMs: number;
 
@@ -24,11 +25,11 @@ export class HealthChecker {
         latencyMs: 0,
         lastChecked: 0,
       });
+      this.connections.set(url, new Connection(url, 'confirmed'));
     }
   }
 
   start(): void {
-    // Одразу перевіряємо всі ендпоінти
     void this.checkAll();
     this.timer = setInterval(() => void this.checkAll(), this.intervalMs);
   }
@@ -55,7 +56,7 @@ export class HealthChecker {
   }
 
   private async checkOne(url: string): Promise<void> {
-    const conn = new Connection(url, 'confirmed');
+    const conn = this.connections.get(url)!;
     const start = Date.now();
 
     try {

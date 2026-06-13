@@ -24,7 +24,7 @@ export interface WalletLike {
 }
 
 export interface ReliableWalletAdapterOptions {
-  /** If true, use ReliableClient for sending; otherwise fall back to wallet's native sendTransaction. */
+  /** If true, use ReliableClient pool for submission; if false, delegate to wallet's native sendTransaction. */
   useReliableClient?: boolean;
   /** Max duration for sendAndConfirm (ms). Default 90_000. */
   maxDurationMs?: number;
@@ -63,10 +63,15 @@ export class ReliableWalletAdapter {
 
   /**
    * Send a transaction using the wallet for signing and ReliableClient for submission.
-   * This replaces the wallet's own sendTransaction to add reliability features.
+   * When useReliableClient is false, delegates to the wallet's native sendTransaction.
    */
   async sendTransaction(transaction: Transaction): Promise<string> {
     if (!this.wallet.publicKey) throw new Error('Wallet not connected');
+
+    if (!this.useReliableClient) {
+      const conn = this.client.pool.getConnection();
+      return this.wallet.sendTransaction(transaction, conn);
+    }
 
     // Prepare the transaction: get fresh blockhash, set fee payer
     const { blockhash, lastValidBlockHeight } = await this.client.blockhashManager.refresh();

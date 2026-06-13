@@ -1,4 +1,5 @@
 import { Transaction, Keypair, SystemProgram, PublicKey } from '@solana/web3.js';
+import bs58 from 'bs58';
 import type { RpcPool } from '../rpc/index.js';
 import type { BlockhashManager } from '../tx/BlockhashManager.js';
 
@@ -39,7 +40,6 @@ const TIP_ACCOUNTS = [
   'DfXygSm4jCyNCybVYYK6DwvWqjKee8pbDmJGcLWNDXjh',
   'ADuUkR4vqLUMWXxW9gh6D6L8pMSawimctcNZ5pGwDcEt',
   '3AVi9Tg9Uo68tJfuvoKvqKNWKkC5wPdSSdeBnizKZ6jT',
-  '96gYZGLnJYVFmbjzopPSU6QiEV5fGqZNyN9nmNhvrZU5',
 ];
 
 function randomTipAccount(): string {
@@ -66,15 +66,18 @@ export class JitoSender {
 
   /**
    * Send a transaction through Jito for MEV protection.
-   * Automatically adds a tip instruction. Falls back to standard RPC if Jito fails.
+   * Automatically adds a tip transaction to the bundle. Falls back to standard RPC if Jito fails.
    */
   async sendWithMevProtection(tx: Transaction, signers: Keypair[]): Promise<string> {
     try {
-      const bundleId = await this.sendBundle([tx], signers);
+      const tipTx = this.buildTipTransaction(signers[0]);
+      // Pass per-tx signers: main tx gets all signers, tip tx needs only the payer.
+      const bundleId = await this.sendBundle([tx, tipTx], [signers, [signers[0]]]);
       const status = await this.waitForBundle(bundleId);
       if (status.status === 'Landed' || status.status === 'Finalizing') {
-        // Extract signature from the first transaction
-        return tx.signatures[0]?.publicKey?.toBase58() ?? bundleId;
+        // Extract the actual transaction signature from the signed tx (64-byte Ed25519 → base58).
+        const sigBytes = tx.signatures[0]?.signature;
+        return sigBytes ? bs58.encode(sigBytes) : bundleId;
       }
       throw new Error(`bundle ${bundleId} status: ${status.status}`);
     } catch (err) {
@@ -90,7 +93,7 @@ export class JitoSender {
    * Returns bundle UUID.
    */
   async sendBundle(transactions: Transaction[], signerSets: Keypair[] | Keypair[][]): Promise<string> {
-    const { blockhash, lastValidBlockHeight } = await this.blockhashManager.refresh();
+    const { blockhash } = await this.blockhashManager.refresh();
 
     // Normalize signers: accept either a flat Keypair[] (all txs same signers)
     // or Keypair[][] (per-tx signers)
@@ -167,7 +170,7 @@ export class JitoSender {
     };
   }
 
-  /** Build a tip transaction to the Jito tip account. */
+  /** Build a tip transaction to a Jito tip account. */
   buildTipTransaction(payer: Keypair): Transaction {
     const tipAccount = new PublicKey(randomTipAccount());
     const tx = new Transaction();

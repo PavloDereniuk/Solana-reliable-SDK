@@ -145,6 +145,21 @@ export class WsManager {
   private async doReconnect(): Promise<void> {
     if (this.destroyed) return;
 
+    const oldConn = this.conn;
+
+    // Best-effort unsubscribe from the old connection before replacing it.
+    await Promise.allSettled(
+      [...this.subscriptions.values()]
+        .filter((sub) => sub.id !== null)
+        .map(async (sub) => {
+          try {
+            await sub.unsubscribe(oldConn, sub.id!);
+          } finally {
+            sub.id = null;
+          }
+        }),
+    );
+
     this.conn = new Connection(this.endpoint, this.commitment);
 
     for (const sub of this.subscriptions.values()) {

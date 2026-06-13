@@ -224,7 +224,10 @@ describe('JitoSender', () => {
     const jito = new JitoSender(makePool() as any, makeBlockhashManager() as any, { fallbackOnError: false });
     const tx = makeTx(keypair);
     const sig = await jito.sendWithMevProtection(tx, [keypair]);
-    expect(sig).toBe(keypair.publicKey.toBase58());
+    // Real Ed25519 signature encoded in base58 — 64 bytes → ~87-88 chars, not a 32-byte pubkey.
+    expect(typeof sig).toBe('string');
+    expect(sig.length).toBeGreaterThan(60);
+    expect(sig).not.toBe(keypair.publicKey.toBase58());
     vi.unstubAllGlobals();
   });
 
@@ -246,7 +249,10 @@ describe('JitoSender', () => {
     const jito = new JitoSender(makePool() as any, makeBlockhashManager() as any, { fallbackOnError: false });
     const tx = makeTx(keypair);
     const sig = await jito.sendWithMevProtection(tx, [keypair]);
-    expect(sig).toBe(keypair.publicKey.toBase58());
+    // Real Ed25519 signature encoded in base58 — 64 bytes → ~87-88 chars, not a 32-byte pubkey.
+    expect(typeof sig).toBe('string');
+    expect(sig.length).toBeGreaterThan(60);
+    expect(sig).not.toBe(keypair.publicKey.toBase58());
     vi.unstubAllGlobals();
   });
 

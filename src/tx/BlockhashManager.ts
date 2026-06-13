@@ -16,6 +16,7 @@ interface CachedEntry extends BlockhashData {
 export class BlockhashManager {
   private cached: CachedEntry | null = null;
   private readonly cacheTtlMs: number;
+  private inflight: Promise<BlockhashData> | null = null;
 
   constructor(
     private readonly pool: RpcPool,
@@ -32,15 +33,13 @@ export class BlockhashManager {
   }
 
   async refresh(): Promise<BlockhashData> {
-    const conn = this.pool.getConnection();
+    if (this.inflight) return this.inflight;
+
+    this.inflight = this.doRefresh();
     try {
-      const result = await conn.getLatestBlockhash('confirmed');
-      this.pool.reportSuccess(conn);
-      this.cached = { ...result, fetchedAt: Date.now() };
-      return result;
-    } catch (err) {
-      this.pool.reportFailure(conn);
-      throw err;
+      return await this.inflight;
+    } finally {
+      this.inflight = null;
     }
   }
 
@@ -63,5 +62,18 @@ export class BlockhashManager {
 
   invalidate(): void {
     this.cached = null;
+  }
+
+  private async doRefresh(): Promise<BlockhashData> {
+    const conn = this.pool.getConnection();
+    try {
+      const result = await conn.getLatestBlockhash('confirmed');
+      this.pool.reportSuccess(conn);
+      this.cached = { ...result, fetchedAt: Date.now() };
+      return result;
+    } catch (err) {
+      this.pool.reportFailure(conn);
+      throw err;
+    }
   }
 }

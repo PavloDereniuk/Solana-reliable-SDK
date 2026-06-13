@@ -1,7 +1,6 @@
 /**
  * Lightweight in-memory metrics collector.
  * No external dependencies — exports Prometheus text format and OTLP-compatible snapshots.
- * For production use, pass an OpenTelemetry MeterProvider via MetricsCollector.withOtel().
  */
 
 export interface LatencySample {
@@ -165,7 +164,13 @@ export class MetricsCollector {
     lines.push('# HELP solana_tx_total Total transactions sent');
     lines.push('# TYPE solana_tx_total counter');
     lines.push(`solana_tx_total ${snap.transactions.total} ${ts}`);
+
+    lines.push('# HELP solana_tx_succeeded_total Successful transactions');
+    lines.push('# TYPE solana_tx_succeeded_total counter');
     lines.push(`solana_tx_succeeded_total ${snap.transactions.succeeded} ${ts}`);
+
+    lines.push('# HELP solana_tx_failed_total Failed transactions');
+    lines.push('# TYPE solana_tx_failed_total counter');
     lines.push(`solana_tx_failed_total ${snap.transactions.failed} ${ts}`);
 
     lines.push('# HELP solana_tx_avg_retries Average retries per transaction');

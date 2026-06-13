@@ -50,6 +50,8 @@ export class ReliableRpcV2 {
   private readonly circuitOpenedAt: Map<string, number> = new Map();
   private readonly CIRCUIT_THRESHOLD = 3;
   private readonly CIRCUIT_TIMEOUT_MS = 60_000;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private readonly rpcCache = new Map<string, any>();
 
   readonly commitment: 'processed' | 'confirmed' | 'finalized';
 
@@ -76,8 +78,7 @@ export class ReliableRpcV2 {
   /** getSlot — fetches current slot from the best available endpoint. */
   async getSlot(): Promise<SlotInfo> {
     return this.withFailover(async (endpoint) => {
-      const { createSolanaRpc } = await import('@solana/rpc');
-      const rpc = createSolanaRpc(endpoint);
+      const rpc = await this.getOrCreateRpc(endpoint);
       const t0 = Date.now();
       const slot = await rpc.getSlot({ commitment: this.commitment }).send();
       return { slot, endpoint, latencyMs: Date.now() - t0 };
@@ -87,8 +88,7 @@ export class ReliableRpcV2 {
   /** getLatestBlockhash — fetches blockhash with lastValidBlockHeight. */
   async getLatestBlockhash(): Promise<BlockhashV2> {
     return this.withFailover(async (endpoint) => {
-      const { createSolanaRpc } = await import('@solana/rpc');
-      const rpc = createSolanaRpc(endpoint);
+      const rpc = await this.getOrCreateRpc(endpoint);
       const result = await rpc.getLatestBlockhash({ commitment: this.commitment }).send();
       return {
         blockhash: result.value.blockhash,
@@ -101,8 +101,7 @@ export class ReliableRpcV2 {
   /** getBalance — returns balance in lamports for the given address. */
   async getBalance(address: Address): Promise<bigint> {
     return this.withFailover(async (endpoint) => {
-      const { createSolanaRpc } = await import('@solana/rpc');
-      const rpc = createSolanaRpc(endpoint);
+      const rpc = await this.getOrCreateRpc(endpoint);
       const result = await rpc.getBalance(address, { commitment: this.commitment }).send();
       return result.value;
     });
@@ -111,8 +110,7 @@ export class ReliableRpcV2 {
   /** sendTransaction — sends a base64-encoded signed transaction. */
   async sendTransaction(encodedTx: string, opts: { skipPreflight?: boolean } = {}): Promise<string> {
     return this.withFailover(async (endpoint) => {
-      const { createSolanaRpc } = await import('@solana/rpc');
-      const rpc = createSolanaRpc(endpoint);
+      const rpc = await this.getOrCreateRpc(endpoint);
       return rpc.sendTransaction(encodedTx as Parameters<typeof rpc.sendTransaction>[0], {
         skipPreflight: opts.skipPreflight ?? false,
         encoding: 'base64',
@@ -130,8 +128,7 @@ export class ReliableRpcV2 {
     err?: unknown;
   } | null>> {
     return this.withFailover(async (endpoint) => {
-      const { createSolanaRpc } = await import('@solana/rpc');
-      const rpc = createSolanaRpc(endpoint);
+      const rpc = await this.getOrCreateRpc(endpoint);
       const result = await rpc.getSignatureStatuses(
         signatures as unknown as Parameters<typeof rpc.getSignatureStatuses>[0],
         { searchTransactionHistory: false },
@@ -155,6 +152,16 @@ export class ReliableRpcV2 {
   }
 
   // ── internals ──────────────────────────────────────────────────────────────
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private async getOrCreateRpc(endpoint: string): Promise<any> {
+    const cached = this.rpcCache.get(endpoint);
+    if (cached) return cached;
+    const { createSolanaRpc } = await import('@solana/rpc');
+    const rpc = createSolanaRpc(endpoint);
+    this.rpcCache.set(endpoint, rpc);
+    return rpc;
+  }
 
   private async withFailover<T>(fn: (endpoint: string) => Promise<T>): Promise<T> {
     const tried = new Set<string>();
