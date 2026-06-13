@@ -224,6 +224,56 @@ describe('TransactionSender', () => {
     expect(tx.instructions).toHaveLength(2);
   });
 
+  it('getWritableAccounts collects writable pubkeys and skips non-writable', async () => {
+    const { PublicKey } = await import('@solana/web3.js');
+    const pool = makePool(() => Promise.resolve('sig_writable'));
+    const fe = makeFeeEstimator();
+    const pk = new (PublicKey as any)('11111111111111111111111111111111');
+
+    const tx = new Transaction() as any;
+    tx.instructions = [{
+      keys: [
+        { pubkey: pk, isWritable: true, isSigner: false },
+        { pubkey: pk, isWritable: false, isSigner: false },
+      ],
+      programId: pk,
+      data: Buffer.alloc(0),
+    }];
+
+    const sender = new TransactionSender(
+      pool as any,
+      makeBlockhashManager() as any,
+      fe as any,
+      makeComputeUnits() as any,
+      { priorityFee: 'auto', retryIntervalMs: 10, maxDurationMs: 5_000 },
+    );
+
+    const promise = sender.send(tx, [new Keypair() as any]);
+    await vi.advanceTimersByTimeAsync(100);
+    await promise;
+
+    expect(fe.estimate).toHaveBeenCalledWith([pk.toBase58()], 'medium');
+  });
+
+  it('throws immediately when sendRawTransaction throws SendTransactionError with permanent marker', async () => {
+    const { SendTransactionError } = await import('@solana/web3.js');
+    const pool = makePool(
+      () => Promise.reject(new (SendTransactionError as any)('Simulation failed: InstructionError [0, ...]')),
+    );
+
+    const sender = new TransactionSender(
+      pool as any,
+      makeBlockhashManager() as any,
+      makeFeeEstimator() as any,
+      makeComputeUnits() as any,
+      { retryIntervalMs: 10, maxDurationMs: 5_000 },
+    );
+
+    await expect(
+      sender.send(new Transaction() as any, [new Keypair() as any]),
+    ).rejects.toThrow('InstructionError');
+  });
+
   it('throws timeout error when maxDuration exceeded', async () => {
     const pool = makePool(() => Promise.reject(new Error('network down')));
 

@@ -200,6 +200,35 @@ describe('TransactionConfirmer', () => {
     await check;
   });
 
+  it('resolves immediately with commitment "processed"', async () => {
+    const pool = makePool(() =>
+      Promise.resolve({ value: [{ confirmationStatus: 'processed', err: null }] }),
+    );
+    const confirmer = new TransactionConfirmer(pool as any, {
+      commitment: 'processed',
+      pollIntervalMs: 10,
+      timeoutMs: 5_000,
+    });
+    await expect(confirmer.confirm('sig_proc', LAST_VALID)).resolves.toBeUndefined();
+  });
+
+  it('reports failure and treats as not-expired when getBlockHeight throws in checkExpired', async () => {
+    const pool = makePool(
+      () => Promise.resolve({ value: [null] }),
+      () => Promise.reject(new Error('block height RPC error')),
+    );
+    const confirmer = new TransactionConfirmer(pool as any, {
+      pollIntervalMs: 10,
+      timeoutMs: 200,
+    });
+
+    const p = confirmer.confirm('sig_noheight', LAST_VALID);
+    const check = expect(p).rejects.toThrow('confirmation timed out');
+    await vi.advanceTimersByTimeAsync(300);
+    await check;
+    expect(pool.reportFailure).toHaveBeenCalled();
+  });
+
   it('handles commitment "finalized" — does not resolve on "confirmed"', async () => {
     let calls = 0;
     const pool = makePool(() => {

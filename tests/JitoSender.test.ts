@@ -271,4 +271,38 @@ describe('JitoSender', () => {
     await expect(jito.getBundleStatus('abc')).rejects.toThrow('503');
     vi.unstubAllGlobals();
   });
+
+  it('sendWithMevProtection throws when bundle status is Failed (not Landed/Finalizing)', async () => {
+    const jito = new JitoSender(makePool() as any, makeBlockhashManager() as any, { fallbackOnError: false });
+    vi.spyOn(jito, 'sendBundle').mockResolvedValue('bundle-fail');
+    vi.spyOn(jito, 'getBundleStatus').mockResolvedValue({ bundleId: 'bundle-fail', status: 'Failed' });
+
+    await expect(jito.sendWithMevProtection(makeTx(keypair), [keypair])).rejects.toThrow('bundle-fail');
+  });
+
+  it('waitForBundle polls with sleep and throws timeout when bundle stays Pending', async () => {
+    vi.useFakeTimers();
+
+    let fetchCount = 0;
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => {
+      fetchCount++;
+      if (fetchCount === 1) {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve({ result: 'bundle-pending' }) });
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve({ result: { value: [] } }) });
+    }));
+
+    const jito = new JitoSender(makePool() as any, makeBlockhashManager() as any, {
+      fallbackOnError: false,
+      bundleTimeoutMs: 5_000,
+    });
+
+    const promise = jito.sendWithMevProtection(makeTx(keypair), [keypair]);
+    const check = expect(promise).rejects.toThrow('did not land within');
+    await vi.advanceTimersByTimeAsync(7_000);
+    await check;
+
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
 });

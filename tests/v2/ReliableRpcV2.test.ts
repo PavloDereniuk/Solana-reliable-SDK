@@ -126,6 +126,52 @@ describe('ReliableRpcV2 (web3.js v2.0 adapter)', () => {
       const rpc = createReliableRpcV2({ endpoints: ENDPOINTS });
       expect(rpc.getAllEndpoints()).toEqual(ENDPOINTS);
     });
+
+    it('throws "All endpoints exhausted" when priority strategy cycles back to already-tried endpoint', async () => {
+      const { createSolanaRpc } = await import('@solana/rpc');
+
+      (createSolanaRpc as any).mockImplementation((ep: string) => {
+        if (ep.includes('ep1')) {
+          return { ...mockRpc, getSlot: vi.fn().mockReturnValue({ send: vi.fn().mockRejectedValue(new Error('ep1 down')) }) };
+        }
+        return mockRpc;
+      });
+
+      const rpc = createReliableRpcV2({ endpoints: ENDPOINTS, strategy: 'priority' });
+      await expect(rpc.getSlot()).rejects.toThrow('All endpoints exhausted');
+    });
+
+    it('circuit recovers after CIRCUIT_TIMEOUT_MS elapses', async () => {
+      vi.useFakeTimers();
+      const { createSolanaRpc } = await import('@solana/rpc');
+
+      let failCount = 0;
+      (createSolanaRpc as any).mockImplementation(() => ({
+        ...mockRpc,
+        getSlot: vi.fn().mockReturnValue({
+          send: vi.fn().mockImplementation(() => {
+            failCount++;
+            if (failCount <= 3) return Promise.reject(new Error('down'));
+            return Promise.resolve(300_000_000n);
+          }),
+        }),
+      }));
+
+      const rpc = createReliableRpcV2({ endpoints: ['https://ep1.com'] });
+
+      // Open the circuit with 3 failures (single endpoint → each call fails and throws)
+      await rpc.getSlot().catch(() => {});
+      await rpc.getSlot().catch(() => {});
+      await rpc.getSlot().catch(() => {});
+
+      // Advance past CIRCUIT_TIMEOUT_MS = 60 000ms → isAvailable returns true again
+      vi.advanceTimersByTime(61_000);
+
+      const result = await rpc.getSlot();
+      expect(result.slot).toBe(300_000_000n);
+
+      vi.useRealTimers();
+    });
   });
 
   describe('Commitment level', () => {

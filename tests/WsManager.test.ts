@@ -138,6 +138,92 @@ describe('WsManager', () => {
     expect(ws.getConnection()).toBe(conn1); // same connection
   });
 
+  it('sets subscription id to null when subscribe throws during reconnect', async () => {
+    const ws = new WsManager('https://api.devnet.solana.com', {
+      healthCheckIntervalMs: 100,
+      healthFailureThreshold: 2,
+      initialReconnectDelayMs: 10,
+    });
+
+    let callCount = 0;
+    const subscribe = vi.fn().mockImplementation(() => {
+      callCount++;
+      if (callCount > 1) throw new Error('subscribe failed on reconnect');
+      return 5;
+    });
+    const unsubscribe = vi.fn().mockResolvedValue(undefined);
+
+    ws.addSubscription('broken-sub', subscribe, unsubscribe);
+    const conn = ws.getConnection();
+    (conn.getSlot as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('timeout'));
+
+    await vi.advanceTimersByTimeAsync(200); // 2 health failures
+    await vi.advanceTimersByTimeAsync(50);  // reconnect fires
+
+    // subscribe was called a 2nd time (on reconnect) and threw → id set to null
+    expect(subscribe).toHaveBeenCalledTimes(2);
+    ws.destroy();
+  });
+
+  it('scheduleReconnect stops when maxReconnectAttempts is 0', async () => {
+    const ws = new WsManager('https://api.devnet.solana.com', {
+      healthCheckIntervalMs: 50,
+      healthFailureThreshold: 2,
+      initialReconnectDelayMs: 10,
+      maxReconnectAttempts: 0,
+    });
+
+    const conn1 = ws.getConnection();
+    (conn1.getSlot as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('timeout'));
+
+    // 2+ failures → scheduleReconnect called → immediately returns because 0 >= 0
+    await vi.advanceTimersByTimeAsync(200);
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(ws.getConnection()).toBe(conn1); // no reconnect happened
+    ws.destroy();
+  });
+
+  it('destroy cancels pending reconnect timer', async () => {
+    const ws = new WsManager('https://api.devnet.solana.com', {
+      healthCheckIntervalMs: 50,
+      healthFailureThreshold: 2,
+      initialReconnectDelayMs: 30_000, // very long delay
+    });
+
+    const conn1 = ws.getConnection();
+    (conn1.getSlot as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('timeout'));
+
+    // 2 failures → scheduleReconnect → sets reconnectTimer (30s delay)
+    await vi.advanceTimersByTimeAsync(150);
+
+    // destroy while reconnect timer is pending → clearTimeout(reconnectTimer)
+    ws.destroy();
+
+    // Even after 60s the connection is unchanged (timer was cleared)
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(ws.getConnection()).toBe(conn1);
+  });
+
+  it('scheduleReconnect skips second call when reconnectTimer is already set', async () => {
+    const ws = new WsManager('https://api.devnet.solana.com', {
+      healthCheckIntervalMs: 50,
+      healthFailureThreshold: 2,
+      initialReconnectDelayMs: 30_000, // very long — timer stays pending
+      maxReconnectAttempts: 10,
+    });
+
+    const conn1 = ws.getConnection();
+    (conn1.getSlot as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('timeout'));
+
+    // 4 failures: 2 → scheduleReconnect (timer set), 2 more → scheduleReconnect (timer already set → skip)
+    await vi.advanceTimersByTimeAsync(300);
+
+    // Reconnect still hasn't fired (30s timer)
+    expect(ws.getConnection()).toBe(conn1);
+    ws.destroy();
+  });
+
   it('resets reconnect counter after successful health check', async () => {
     const ws = new WsManager('https://api.devnet.solana.com', {
       healthCheckIntervalMs: 100,

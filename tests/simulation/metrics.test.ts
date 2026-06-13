@@ -104,6 +104,13 @@ describe('MetricsCollector', () => {
       // normalizeUrl extracts hostname only — SECRET123 should not appear
       expect(output).not.toContain('SECRET123');
     });
+
+    it('falls back to raw string when normalizeUrl receives an invalid URL', () => {
+      // "not-a-valid-url" causes `new URL()` to throw; the catch block returns the raw string
+      collector.recordRpcCall('not-a-valid-url', 50, true);
+      const output = collector.exportPrometheus();
+      expect(output).toContain('not-a-valid-url');
+    });
   });
 
   describe('OTLP JSON export', () => {
@@ -123,6 +130,24 @@ describe('MetricsCollector', () => {
       const svcName = attrs.find((a: any) => a.key === 'service.name');
       expect(svcName?.value?.stringValue).toBe('solana-reliable-sdk');
     });
+
+    it('stateNum returns 1 for HALF_OPEN and 2 for OPEN in OTLP export', () => {
+      const half = new MetricsCollector();
+      half.recordRpcCall('https://rpc.example.com', 50, true);
+      half.recordCircuitState('https://rpc.example.com', 'HALF_OPEN');
+      const otlp1 = half.exportOtlpJson() as any;
+      const metrics1 = otlp1.resourceMetrics[0].scopeMetrics[0].metrics;
+      const stateMetric1 = metrics1.find((m: any) => m.name === 'solana.circuit_breaker.state');
+      expect(stateMetric1?.gauge?.dataPoints[0]?.asDouble).toBe(1);
+
+      const open = new MetricsCollector();
+      open.recordRpcCall('https://rpc.example.com', 50, true);
+      open.recordCircuitState('https://rpc.example.com', 'OPEN');
+      const otlp2 = open.exportOtlpJson() as any;
+      const metrics2 = otlp2.resourceMetrics[0].scopeMetrics[0].metrics;
+      const stateMetric2 = metrics2.find((m: any) => m.name === 'solana.circuit_breaker.state');
+      expect(stateMetric2?.gauge?.dataPoints[0]?.asDouble).toBe(2);
+    });
   });
 
   describe('Memory management', () => {
@@ -133,6 +158,14 @@ describe('MetricsCollector', () => {
       const ep = Object.keys(snap.rpc)[0];
       // totalRequests continues counting even after samples are bounded
       expect(snap.rpc[ep]?.totalRequests).toBe(100);
+    });
+
+    it('bounds txSamples at 1000 by shifting oldest entries', () => {
+      for (let i = 0; i < 1002; i++) {
+        collector.recordTransaction({ retries: 0, success: true, durationMs: 100 });
+      }
+      const snap = collector.getSnapshot();
+      expect(snap.transactions.total).toBe(1000);
     });
 
     it('reset() clears all accumulated data', () => {
