@@ -12,7 +12,7 @@
     }
   },
   "bin": {
-    "solana-diagnose": "./bin/diagnose.js"
+    "solana-diagnose": "bin/diagnose.js"
   },
   "files": [
     "dist",
@@ -43,7 +43,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/PavloDereniuk/solana-reliable-sdk"
+    "url": "git+https://github.com/PavloDereniuk/solana-reliable-sdk.git"
   },
   "homepage": "https://github.com/PavloDereniuk/solana-reliable-sdk#readme",
   "bugs": {
@@ -61,11 +61,21 @@
     "@solana/transactions": "^6.9.0"
   },
   "peerDependenciesMeta": {
-    "@solana/addresses": { "optional": true },
-    "@solana/rpc": { "optional": true },
-    "@solana/rpc-types": { "optional": true },
-    "@solana/signers": { "optional": true },
-    "@solana/transactions": { "optional": true }
+    "@solana/addresses": {
+      "optional": true
+    },
+    "@solana/rpc": {
+      "optional": true
+    },
+    "@solana/rpc-types": {
+      "optional": true
+    },
+    "@solana/signers": {
+      "optional": true
+    },
+    "@solana/transactions": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@solana/addresses": "^6.9.0",
